@@ -5,12 +5,21 @@ import os
 import json
 
 from torch.utils.data import Dataset
-
+from pycocotools.coco import COCO
+from PIL import Image
 
 class DrywallQADatasetCustom(Dataset):
-
+    """ Loads COCO format data
+    
+    load the images and annotations from COCO format (data folder). 
+    convert the bbox from annotations into masks if there is no segementations
+     available for the image. 
+    """
     def __init__(self, folder_dir):
+        self.folder_dir = folder_dir
         self.json_dir = os.path.join(folder_dir, "_annotations.coco.json")
+        self.coco = COCO(self.json_dir)
+
         with open(self.json_dir, 'r') as f:
             
             self.data = json.load(f)
@@ -20,15 +29,27 @@ class DrywallQADatasetCustom(Dataset):
         return len(self.data['images'])
 
     def __getitem__(self, idx):
-        self.image_id = self.data['images'][idx]['id']
-        self.image_file_name = self.data['images'][idx]['file_name']
+        image_id = self.data['images'][idx]['id']
+        image_file_name = self.data['images'][idx]['file_name']
 
-        self.image_path = os.path.join(self.json_dir, self.image_file_name)
-        print(self.image_path)
-        # self.image_file_name = os.path.join(self.json_dir,self.image)
-        # print(self.image.keys()) 
+        image_path = os.path.join(self.folder_dir, image_file_name)
+        annotation_ids = self.coco.getAnnIds(image_id)
+        annotations = self.coco.loadAnns(annotation_ids)
 
-        return {}
+        image = Image.open(image_path).convert("RGB")
+
+        w , h = image.size
+        mask = np.zeros((w, h), dtype=np.uint8)
+
+        for a in annotations:
+            if 'segmentation' in a and a['segmentation']:
+                mask = np.maximum(mask, self.coco.annToMask(a))
+            elif 'bbox' in a:
+                x, y, w_box, h_box = a['bbox']
+                mask[y : y + h_box, x: x + w_box] = 1
+
+        mask = (mask * 255).astype(np.uint8)
+        return { "image": image, "mask": Image.fromarray(mask), "image_id" : image_id}
 
     def data_info(self):
         print(self.data.keys())
@@ -39,12 +60,3 @@ class DrywallQADatasetCustom(Dataset):
 
 
 
-def main():
-    d = DrywallQADatasetCustom("/home/saitama/Documents/Prompted Segmentation for Drywall QA/datasets/Drywall_Join_Detect_v1/train/")
-    print(len(d))
-    print(d[0])    
-    # d.data_info()
-
-
-if __name__ == "__main__":
-    main()
