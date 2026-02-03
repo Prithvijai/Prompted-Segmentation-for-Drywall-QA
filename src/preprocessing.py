@@ -15,7 +15,8 @@ class DrywallQADatasetCustom(Dataset):
     convert the bbox from annotations into masks if there is no segementations
      available for the image. 
     """
-    def __init__(self, folder_dir):
+    def __init__(self, folder_dir, prompt):
+        self.prompt = prompt
         self.folder_dir = folder_dir
         self.json_dir = os.path.join(folder_dir, "_annotations.coco.json")
         self.coco = COCO(self.json_dir)
@@ -45,11 +46,11 @@ class DrywallQADatasetCustom(Dataset):
             if 'segmentation' in a and a['segmentation']:
                 mask = np.maximum(mask, self.coco.annToMask(a))
             elif 'bbox' in a:
-                x, y, w_box, h_box = a['bbox']
+                x, y, w_box, h_box = [int(v) for v in a['bbox']]
                 mask[y : y + h_box, x: x + w_box] = 1
 
         mask = (mask * 255).astype(np.uint8)
-        return { "image": image, "mask": Image.fromarray(mask), "image_id" : image_id}
+        return { "image": image, "mask": Image.fromarray(mask), "prompt" : self.prompt, "image_id" : image_id}
 
     def data_info(self):
         print(self.data.keys())
