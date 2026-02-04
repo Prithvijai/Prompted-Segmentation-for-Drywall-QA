@@ -5,6 +5,7 @@ from torch import nn
 from src.preprocessing import DrywallQADatasetCustom
 from src.model import load_SAM3_LoRA_model
 from torch.utils.data import ConcatDataset, DataLoader
+from src.utils import collate_fn
 from src.engine import train_model
 
 
@@ -20,9 +21,10 @@ d2_train = DrywallQADatasetCustom("./datasets/cracks_v1/train", prompt="segment 
 train_ds = ConcatDataset([d1_train, d2_train])
 train_loader = DataLoader(
     train_ds,
-    batch_size=16,
+    batch_size=1,
     shuffle=True,
-    num_workers=4
+    num_workers=4,
+    collate_fn=collate_fn
 )
 
 d1_vaild = DrywallQADatasetCustom("./datasets/Drywall_Join_Detect_v1/valid", prompt="segment taping area")
@@ -31,9 +33,10 @@ d2_vaild = DrywallQADatasetCustom("./datasets/cracks_v1/valid", prompt="segment 
 val_ds = ConcatDataset([d1_vaild, d2_vaild])
 val_loader = DataLoader(
     val_ds,
-    batch_size=16,
+    batch_size=1,
     shuffle=False,
-    num_workers=4
+    num_workers=4,
+    collate_fn=collate_fn
 )
 
 
