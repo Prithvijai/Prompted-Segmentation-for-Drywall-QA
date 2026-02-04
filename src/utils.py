@@ -3,8 +3,8 @@ import numpy as np
 import torchvision.transforms.functional as TF
 
 def collate_fn(batch):
+    """for pre-processing the dataset before loading"""
     size = (640, 640)
-    # for faster trainig half the 640 * 640 resolution
     images = [TF.resize(item["image"], size) for item in batch]
     images = [TF.to_tensor(img) for img in images]
 
@@ -18,3 +18,17 @@ def collate_fn(batch):
         "mask": torch.stack(masks), 
         "prompt": prompts
     }
+
+
+def calculate_metrics(pred_mask, gt_mask):
+    """Calculates IoU and Dice Score for binary masks"""
+    pred = (pred_mask > 0.5).astype(np.uint8)
+    gt = (gt_mask > 0.5).astype(np.uint8)
+    
+    intersection = np.logical_and(pred, gt).sum()
+    union = np.logical_or(pred, gt).sum()
+    
+    iou = intersection / union if union > 0 else 1.0
+    dice = (2 * intersection) / (pred.sum() + gt.sum()) if (pred.sum() + gt.sum()) > 0 else 1.0
+    
+    return iou, dice
