@@ -1,6 +1,7 @@
 
 import torch
 from tqdm import tqdm
+import torch.nn.functional as F
 
 
 
@@ -15,12 +16,21 @@ def train_step(model, processor, train_dataloader, optimizer, loss_fn, device):
         masks = batch["mask"].to(device).unsqueeze(1)
         inputs = processor(batch['image'], text=batch["prompt"], return_tensors="pt").to(device)
 
-        with torch.amp.autocast(device_type=device):
+        with torch.amp.autocast(device_type="cuda"):
             outputs = model(**inputs)
-            loss = loss_fn(outputs.pred_masks, masks)
+
+            pred_masks = outputs.pred_masks.mean(dim=1, keepdim=True)
+
+            pred_masks = F.interpolate(
+                            pred_masks, 
+                            size=masks.shape[-2:], 
+                            mode="bilinear", 
+                            align_corners=False
+                        )
+            loss = loss_fn(pred_masks, masks)
             
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
@@ -43,9 +53,17 @@ def val_step(model, processor, test_dataloader, loss_fn, device):
             masks = batch["mask"].to(device).unsqueeze(1)
             inputs = processor(batch['image'], text=batch["prompt"], return_tensors="pt").to(device)
 
-            with torch.amp.autocast(device_type=device):
+            with torch.amp.autocast(device_type="cuda"):
                 outputs = model(**inputs)
-                loss = loss_fn(outputs.pred_masks, masks)
+                pred_masks = outputs.pred_masks.mean(dim=1, keepdim=True)
+
+                pred_masks = F.interpolate(
+                                pred_masks, 
+                                size=masks.shape[-2:], 
+                                mode="bilinear", 
+                                align_corners=False
+                            )
+                loss = loss_fn(pred_masks, masks)
                 val_loss +=loss.item()
 
     val_loss = val_loss /len(test_dataloader)
@@ -58,7 +76,7 @@ def train_model(model, processor, train_dataloader, test_dataloader, optimizer, 
     for epoch in range(epochs):
 
         avg_train_loss = train_step(model, processor, train_dataloader, optimizer, loss_fn, device)
-        avg_val_loss = val_step(model, processor, test_dataloader, optimizer, loss_fn, device)
+        avg_val_loss = val_step(model, processor, test_dataloader, loss_fn, device)
 
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
 
@@ -69,6 +87,7 @@ def train_model(model, processor, train_dataloader, test_dataloader, optimizer, 
 
         model.save_pretrained("./models/sam3_lora_final")
         print("Training Complete!")
+
 
 
 
